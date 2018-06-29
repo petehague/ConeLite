@@ -3,6 +3,7 @@
 import tornado.web
 import tornado.ioloop
 import sys
+import sqlite3 as sql
 
 dbfile = sys.argv[1]
 if len(sys.argv)>2:
@@ -10,22 +11,63 @@ if len(sys.argv)>2:
 else:
     portnumber = 80
 
+rafield = ""
+decfield = ""
+raindex = -1
+decindex = -1
+
+dbconnection = sql.connect(dbfile)
+curs = dbconnection.cursor()
+curs.execute("select * from ucdTab")
+track = 0
+for row in curs:
+    if row[1]=="POS_EQ_RA_MAIN":
+        rafield = row[0]
+        raindex = track
+    if row[1]=="POS_EQ_DEC_MAIN":
+        decfield = row[0]
+        decindex = track
+    track += 1
+
+def conesearch(ra, dec, sr):
+    global rafield, decfield, dbconnection
+    query = "select * from dataTab "
+    query += ("where (({0}>=({2}-{4}) and {0}<=({2}+{4})) or "
+              "({0}-360>=({2}-{4}) and {0}-360<=({2}+{4}))) and "
+              "{1}>=({3}-{4}) and {1}<=({3}+{4}) ").format(rafield,
+                                                         decfield,
+                                                         ra, dec,
+                                                         sr)
+    curs = dbconnection.cursor()
+    curs.execute(query)
+    srsq = sr*sr
+    for row in curs:
+        radist = ra-row[raindex]
+        decdist = dec-row[decindex]
+        if radist*radist+decdist*decdist<=sr:
+            yield row
+
 class ConeSearchHandler(tornado.web.RequestHandler):
     def get(self):
         get_vars = self.request.arguments
-        print(get_vars)
         ra = -1
         dec = -1
         radius = -1
         if 'RA' in get_vars:
-            ra = float(get_vars['RA'])
+            ra = float(get_vars['RA'][0])
         if 'DEC' in get_vars:
-            dec = float(get_vars['DEC'])
+            dec = float(get_vars['DEC'][0])
         if 'SR' in get_vars:
-            radius = float(get_vars['SR'])
+            radius = float(get_vars['SR'][0])
         if min([ra,dec,radius])==-1:
             print("ERROR: Incorrect request")
             return
+        result = ""
+        for row in conesearch(ra, dec, radius):
+            for item in row:
+                result += "{}, ".format(item)
+            result += "<br />"
+        self.write(result)
 
 class App(tornado.web.Application):
     def __init__(self):

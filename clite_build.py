@@ -93,6 +93,7 @@ curs.execute("create table if not exists ucdTab(\
 for colname in ucds:
     curs.execute("insert into ucdTab (Colname, UCD) \
                   values ('{}', '{}')".format(colname, ucds[colname]))
+dbconnection.commit()
 
 curs.execute("create table if not exists\
               dataTab({})".format(collist))
@@ -106,3 +107,4 @@ for row in data:
             vals += "{}, ".format(row[colname])
     curs.execute("insert into dataTab values\
                   ({})".format(vals[:-2]))
+dbconnection.commit()
