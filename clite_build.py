@@ -4,6 +4,7 @@
 
 '''
 
+import os
 import sys
 import re
 import sqlite3 as sql
@@ -67,8 +68,10 @@ for colname in data.colnames:
     ucds[colname] = ""
 
 collist = ""
+pytypes = {}
 for colname in data.colnames:
     typename = data.dtype[colname].str
+    pytypes[colname] = typename
     if "i" in typename:
         collist += colname+" INT, "
         continue
@@ -83,16 +86,19 @@ collist = collist[:-2]
    Build the database using SQLite
 '''
 dbname = tablefile[:-4]+".db"
+os.remove(dbname)
 print("Writing to {}...".format(dbname))
 dbconnection = sql.connect(dbname)
 curs = dbconnection.cursor()
 
 curs.execute("create table if not exists ucdTab(\
               Colname varchar(50),\
-              UCD varchar(50))")
+              UCD varchar(50),\
+              PyType varchar(50))")
 for colname in ucds:
-    curs.execute("insert into ucdTab (Colname, UCD) \
-                  values ('{}', '{}')".format(colname, ucds[colname]))
+    print(colname)
+    curs.execute("insert into ucdTab (Colname, UCD, PyType) \
+                  values ('{}', '{}', '{}')".format(colname, ucds[colname], pytypes[colname]))
 dbconnection.commit()
 
 curs.execute("create table if not exists\

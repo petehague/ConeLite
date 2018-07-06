@@ -4,6 +4,9 @@ import tornado.web
 import tornado.ioloop
 import sys
 import sqlite3 as sql
+from astropy.table import Table
+import astropy.io.votable as votable
+from io import StringIO
 
 dbfile = sys.argv[1]
 if len(sys.argv)>2:
@@ -47,6 +50,18 @@ def conesearch(ra, dec, sr):
         if radist*radist+decdist*decdist<=sr:
             yield row
 
+def newtable():
+    global dbconnection
+    query = "select Colname,PyType from ucdTab"
+    curs = dbconnection.cursor()
+    curs.execute(query)
+    colnames = []
+    typenames = []
+    for row in curs:
+        colnames.append(row[0])
+        typenames.append(row[1])
+    return Table(names=colnames, dtype=typenames)
+
 class ConeSearchHandler(tornado.web.RequestHandler):
     def get(self):
         get_vars = self.request.arguments
@@ -62,12 +77,17 @@ class ConeSearchHandler(tornado.web.RequestHandler):
         if min([ra,dec,radius])==-1:
             print("ERROR: Incorrect request")
             return
-        result = ""
+        result = newtable()
         for row in conesearch(ra, dec, radius):
-            for item in row:
-                result += "{}, ".format(item)
-            result += "<br />"
-        self.write(result)
+            result.add_row(row)
+        vo_out = votable.from_table(result)
+        # Should not have to do this! Bad API for votable!
+        vo_out.to_xml("tempfile.xml")
+        outstring = ""
+        with open("tempfile.xml","r") as vofile:
+            for line in vofile:
+                outstring+=line
+        self.write(outstring)
 
 class App(tornado.web.Application):
     def __init__(self):
